@@ -2,6 +2,7 @@
 from threading import Thread
 from subprocess import Popen, PIPE
 from time import sleep
+import urllib.request
 
 # First Party
 import instructlab.lab as lab
@@ -38,14 +39,11 @@ class GUI:
 
     def __init__(self):
         self.WINDOW = self._main_window()
-        # self.LAB = lab.Lab(config.read_config(config.DEFAULT_CONFIG))
+
         self.LAB = lab.Lab(config.get_default_config())
         self.DEFAULT_MAP = config.get_dict(self.LAB.config)
         self.SERVER_STARTED = False
-
-        self.STATUS_MESSAGE = ttk.Label(
-            text="Initiating ILAB, please standby...")
-        self.STATUS_MESSAGE.place(relx=0.01, rely=0.93)
+        self.SERVER_THREAD = None
 
         self.SERVER_MESSAGE = ttk.Label(
             text='server UP' if self.SERVER_STARTED else 'server DOWN', foreground='green' if self.SERVER_STARTED else 'red')
@@ -54,74 +52,113 @@ class GUI:
         self.TEXT_BOX = None
         self.CHAT_PROCESS = None
 
-    def init_lab(self, message):
-        lab.init(["--non-interactive"], standalone_mode=False,
-                 obj=self.LAB, default_map=self.DEFAULT_MAP)
-        message.config(text='ILAB initiated')
+    def update_message(self, role, text):
+        message = text
+        if role == 'ILAB':
+            message = "ILAB >>> " + message + "\n---------\n\n"
+        elif role == 'USER':
+            message = "USER >>> " + message + "\n"
+        else: # assume system
+            message = "#### SYSTEM ####\n" + message +"\n################\n"
 
-        lab.download([], standalone_mode=False)
-        message.config(text='model downloaded')
-
-    def toggle_server(self):
-        # TODO: stop server
-        # TODO: select model to start the server
-        # try:
-        # start server with lab
-        if not self.SERVER_STARTED:
-            server_thread = Thread(
-                target=lab.serve,
-                args=[
-                    [
-                        "--model-path", self.DEFAULT_MAP['serve']['model_path'],
-                        "--gpu-layers", self.DEFAULT_MAP['serve']['gpu_layers'],
-                        "--max-ctx-size", self.DEFAULT_MAP['serve']['max_ctx_size']
-                    ],
-                ],
-                kwargs={
-                    'standalone_mode': True,
-                    'obj': self.LAB,
-                    'default_map': self.DEFAULT_MAP
-                }
-            )
-            server_thread.start()
-
-            sleep(5)
-
-            # TODO: check correctly started
-            self.SERVER_STARTED = not self.SERVER_STARTED
-            # except Exception as exc:
-            #     self.STATUS_MESSAGE.config(text=f"Error creating server: {exc}", foreground="red")
-
-        self.SERVER_MESSAGE.config(text='server UP' if self.SERVER_STARTED else 'server DOWN',
-                                   foreground='green' if self.SERVER_STARTED else 'red')
-
-    def update_message(self, message):
         self.TEXT_BOX.config(state='normal')
         self.TEXT_BOX.insert('end', '\n'+message)
         self.TEXT_BOX.config(state='disabled')
 
+    def init_lab(self):
+        lab.init(["--non-interactive"], standalone_mode=False,
+                 obj=self.LAB, default_map=self.DEFAULT_MAP)
+        self.update_message("SYSTEM", "<<< INFO >>> ILAB initiated, downloading model....")
+        lab.download([], standalone_mode=False)
+        self.update_message("SYSTEM", "<<< INFO >>> Model downloaded correctly :)")
+
+
+    def toggle_server(self):
+        # TODO: select model to start the server
+        try:
+            # start server with lab
+            if not self.SERVER_STARTED:
+                self.update_message("SYSTEM", "<<< INFO >>> Starting the server...")
+                self.SERVER_THREAD = Thread(
+                    target=lab.serve,
+                    args=[
+                        [
+                            "--model-path", self.DEFAULT_MAP['serve']['model_path'],
+                            "--gpu-layers", self.DEFAULT_MAP['serve']['gpu_layers'],
+                            "--max-ctx-size", self.DEFAULT_MAP['serve']['max_ctx_size']
+                        ],
+                    ],
+                    kwargs={
+                        'standalone_mode': True,
+                        'obj': self.LAB,
+                        'default_map': self.DEFAULT_MAP
+                    }
+                )
+                self.SERVER_THREAD.start()
+
+                while not self.SERVER_STARTED:
+                    #using default local server
+                    status = None
+                    try:
+                        status = urllib.request.urlopen("http://localhost:8000").status
+                    except:
+                        print("server not ready yet")
+                    if status  == 200:
+                        # TODO: check correctly started
+                        self.SERVER_STARTED = True
+                        self.update_message("SYSTEM", "<<< INFO >>> Server started correctly :)")
+                    else:
+                        self.update_message("SYSTEM", "<<< INFO >>> Waiting for server to start...")
+                        sleep(5)
+        # TODO: stop server
+            # else:
+            #     self.update_message("SYSTEM", "<<< INFO >>> Shutting down the server...")
+            #     #XXX: HOW??
+            #     while self.SERVER_STARTED:
+            #         #using default local server
+            #         status = None
+            #         try:
+            #             status = urllib.request.urlopen("http://localhost:8000").status
+            #         except:
+            #             self.SERVER_STARTED = False
+            #         if status == 200:
+            #             self.update_message("SYSTEM", "<<< INFO >>> Waiting for server to stop...")
+            #             sleep(5)
+            #     self.update_message("SYSTEM", "<<< INFO >>> Server stopped")
+
+        except Exception as exc:
+            self.update_message("SYSTEM", f"<<< ERROR >>> Error creating server: {exc}")
+
+        self.SERVER_MESSAGE.config(text='server UP' if self.SERVER_STARTED else 'server DOWN',
+                                   foreground='green' if self.SERVER_STARTED else 'red')
+
     def send_message(self, e):
-        text = e.widget.get()
-        self.update_message("USER >>> " +text)
-        e.widget.delete(0, 'end')
+        if self.SERVER_STARTED:
+            text = e.widget.get()
+            self.update_message("USER", text)
+            e.widget.delete(0, 'end')
 
-        #XXX install locally with `pip install -e . -C cmake_args="-DLLAMA_METAL=on"`
-        self.CHAT_PROCESS = Popen(f"source venv/bin/activate; ilab chat -c non_interactive -qq {text}", stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
+            #XXX install locally with `pip install -e . -C cmake_args="-DLLAMA_METAL=on"`
+            # call the chat in quick question (-qq) mode so it finishes after replying and only returns the result generated text
+            # WARNING: it does not retain any context in between calls
+            self.CHAT_PROCESS = Popen(f"source venv/bin/activate; ilab chat -qq {text}", stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
 
-        stdout, stderr = self.CHAT_PROCESS.communicate()
-        self.update_message("ILAB >>> " +stdout.decode('utf-8') + "\n\n-------------")
+            stdout, stderr = self.CHAT_PROCESS.communicate()
+            self.update_message("ILAB", stdout.decode('utf-8'))
 
-        print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+            print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+        else:
+            self.update_message("SYSTEM", "<<< WARNING >>> Start the LLM server first")
 
     def show_chat(self):
-        message = "ILAB >>> Ask me anything! \n-------------"
         self.TEXT_BOX = tk.Text(
             height=50,
             width=150
         )
         self.TEXT_BOX.pack()
-        self.TEXT_BOX.insert('end', message)
         self.TEXT_BOX.config(state='disabled')
+
+        self.update_message('ILAB', "Hello! Ask me anything!")
 
         user_entry = ttk.Entry(width=100)
         user_entry.pack()
@@ -135,7 +172,7 @@ class GUI:
 
         self.show_chat()
 
-        self.WINDOW.after(1000, self.init_lab, self.STATUS_MESSAGE)
+        self.WINDOW.after(1000, self.init_lab)
 
         # keep as last line of function to render the window
         self.WINDOW.mainloop()
