@@ -1,5 +1,7 @@
 # native
 from threading import Thread
+from subprocess import Popen, PIPE
+from time import sleep
 
 # First Party
 import instructlab.lab as lab
@@ -49,6 +51,9 @@ class GUI:
             text='server UP' if self.SERVER_STARTED else 'server DOWN', foreground='green' if self.SERVER_STARTED else 'red')
         self.SERVER_MESSAGE.place(relx=0.01, rely=0.97)
 
+        self.TEXT_BOX = None
+        self.CHAT_PROCESS = None
+
     def init_lab(self, message):
         lab.init(["--non-interactive"], standalone_mode=False,
                  obj=self.LAB, default_map=self.DEFAULT_MAP)
@@ -59,6 +64,7 @@ class GUI:
 
     def toggle_server(self):
         # TODO: stop server
+        # TODO: select model to start the server
         # try:
         # start server with lab
         if not self.SERVER_STARTED:
@@ -79,20 +85,55 @@ class GUI:
             )
             server_thread.start()
 
+            sleep(5)
+
             # TODO: check correctly started
             self.SERVER_STARTED = not self.SERVER_STARTED
             # except Exception as exc:
             #     self.STATUS_MESSAGE.config(text=f"Error creating server: {exc}", foreground="red")
 
         self.SERVER_MESSAGE.config(text='server UP' if self.SERVER_STARTED else 'server DOWN',
-                                foreground='green' if self.SERVER_STARTED else 'red')
-    
+                                   foreground='green' if self.SERVER_STARTED else 'red')
+
+    def update_message(self, message):
+        self.TEXT_BOX.config(state='normal')
+        self.TEXT_BOX.insert('end', '\n'+message)
+        self.TEXT_BOX.config(state='disabled')
+
+    def send_message(self, e):
+        text = e.widget.get()
+        self.update_message("USER >>> " +text)
+        e.widget.delete(0, 'end')
+
+        #XXX install locally with `pip install -e . -C cmake_args="-DLLAMA_METAL=on"`
+        self.CHAT_PROCESS = Popen(f"source venv/bin/activate; ilab chat -c non_interactive -qq {text}", stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
+
+        stdout, stderr = self.CHAT_PROCESS.communicate()
+        self.update_message("ILAB >>> " +stdout.decode('utf-8') + "\n\n-------------")
+
+        print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+
+    def show_chat(self):
+        message = "ILAB >>> Ask me anything! \n-------------"
+        self.TEXT_BOX = tk.Text(
+            height=50,
+            width=150
+        )
+        self.TEXT_BOX.pack()
+        self.TEXT_BOX.insert('end', message)
+        self.TEXT_BOX.config(state='disabled')
+
+        user_entry = ttk.Entry(width=100)
+        user_entry.pack()
+        user_entry.bind("<Return>", self.send_message)
 
     def main(self):
 
         start_stop_server_button = ttk.Button(
             text="Start server" if not self.SERVER_STARTED else "Stop server", command=self.toggle_server)
         start_stop_server_button.place(relx=0.1, rely=0.96)
+
+        self.show_chat()
 
         self.WINDOW.after(1000, self.init_lab, self.STATUS_MESSAGE)
 
