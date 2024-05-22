@@ -1,9 +1,9 @@
 # native
-from threading import Thread
 from subprocess import Popen, PIPE
 from time import sleep
 import urllib.request
 import os
+import psutil
 
 # First Party
 import instructlab.lab as lab
@@ -46,7 +46,7 @@ class GUI:
         self.LAB = lab.Lab(config.get_default_config())
         self.DEFAULT_MAP = config.get_dict(self.LAB.config)
         self.SERVER_STARTED = False
-        self.SERVER_THREAD = None
+        self.SERVER_PROCESS = None
 
         self.SERVER_MESSAGE = ttk.Label(
             text='server UP' if self.SERVER_STARTED else 'server DOWN', foreground='green' if self.SERVER_STARTED else 'red')
@@ -82,7 +82,7 @@ class GUI:
             "SYSTEM", "<<< INFO >>> Model downloaded correctly :)")
 
         self.update_message("SYSTEM", f"<<< INFO >>> {
-                            len(self.MODELS)} available {self.MODELS}")
+            len(self.MODELS)} available {self.MODELS}")
 
     def get_available_models(self):
         cwd = os.path.join(os.getcwd(), MODELS_FOLDER)
@@ -92,27 +92,12 @@ class GUI:
 
     def toggle_server(self):
         try:
-            # TODO: REFACTOR TO BE ABLE TO STOP IT
             # start server with lab
             if not self.SERVER_STARTED:
                 self.update_message(
                     "SYSTEM", f"<<< INFO >>> Starting the server with model '{self.SELECTED_MODEL.get()}'...")
-                self.SERVER_THREAD = Thread(
-                    target=lab.serve,
-                    args=[
-                        [
-                            "--model-path", self.DEFAULT_MAP['serve']['model_path'] if self.SELECTED_MODEL.get() == "DEFAULT" else self.SELECTED_MODEL.get(),
-                            "--gpu-layers", self.DEFAULT_MAP['serve']['gpu_layers'],
-                            "--max-ctx-size", self.DEFAULT_MAP['serve']['max_ctx_size']
-                        ],
-                    ],
-                    kwargs={
-                        'standalone_mode': True,
-                        'obj': self.LAB,
-                        'default_map': self.DEFAULT_MAP
-                    }
-                )
-                self.SERVER_THREAD.start()
+                self.SERVER_PROCESS = Popen(f"source venv/bin/activate; ilab serve --model-path {self.DEFAULT_MAP['serve']['model_path'] if self.SELECTED_MODEL.get(
+                ) == "DEFAULT" else self.SELECTED_MODEL.get()}", stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
 
                 while not self.SERVER_STARTED:
                     # using default local server
@@ -123,7 +108,6 @@ class GUI:
                     except:
                         print("server not ready yet")
                     if status == 200:
-                        # TODO: check correctly started
                         self.SERVER_STARTED = True
                         self.update_message(
                             "SYSTEM", "<<< INFO >>> Server started correctly :)")
@@ -131,23 +115,27 @@ class GUI:
                         self.update_message(
                             "SYSTEM", "<<< INFO >>> Waiting for server to start...")
                         sleep(5)
-        # TODO: stop server
+            # stop server
             else:
                 # refresh available models for the next execution
+                self.update_message(
+                    "SYSTEM", "<<< INFO >>> Shutting down the server...")
+                for children_pid in (psutil.Process(self.SERVER_PROCESS.pid)).children(recursive=True):
+                    children_pid.kill()
+                while self.SERVER_STARTED:
+                    # using default local server
+                    status = None
+                    try:
+                        status = urllib.request.urlopen(
+                            "http://localhost:8000").status
+                        if status == 200:
+                            self.update_message(
+                                "SYSTEM", "<<< INFO >>> Waiting for server to stop...")
+                            sleep(5)
+                    except:
+                        self.SERVER_STARTED = False
+                self.update_message("SYSTEM", "<<< INFO >>> Server stopped")
                 self.get_available_models()
-            #     self.update_message("SYSTEM", "<<< INFO >>> Shutting down the server...")
-            #     #XXX: HOW??
-            #     while self.SERVER_STARTED:
-            #         #using default local server
-            #         status = None
-            #         try:
-            #             status = urllib.request.urlopen("http://localhost:8000").status
-            #         except:
-            #             self.SERVER_STARTED = False
-            #         if status == 200:
-            #             self.update_message("SYSTEM", "<<< INFO >>> Waiting for server to stop...")
-            #             sleep(5)
-            #     self.update_message("SYSTEM", "<<< INFO >>> Server stopped")
 
         except Exception as exc:
             self.update_message(
@@ -194,12 +182,13 @@ class GUI:
         # send with SHIFT+ENTER
         user_entry.bind("<Shift-Return>", self.send_message)
         # new line with ENTER
-        user_entry.bind("<Return>", lambda x: self.TEXT_BOX.insert('end', '\n'))
+        user_entry.bind(
+            "<Return>", lambda x: self.TEXT_BOX.insert('end', '\n'))
 
     def main(self):
 
         start_stop_server_button = ttk.Button(
-            text="Start server" if not self.SERVER_STARTED else "Stop server", command=self.toggle_server)
+            text="Start/Stop server", command=self.toggle_server)
         start_stop_server_button.place(relx=0.1, rely=0.96)
 
         # datatype of menu text
@@ -208,7 +197,7 @@ class GUI:
         # initial menu text
         self.SELECTED_MODEL.set("DEFAULT")
         drop = tk.OptionMenu(self.WINDOW, self.SELECTED_MODEL, *self.MODELS)
-        drop.place(relx=0.22, rely=0.962)
+        drop.place(relx=0.26, rely=0.962)
 
         self.show_chat()
 
