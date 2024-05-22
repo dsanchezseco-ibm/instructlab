@@ -90,6 +90,15 @@ class GUI:
             cwd) if os.path.isfile(os.path.join(cwd, f))]
         self.MODELS = ['DEFAULT'] + models
 
+    @staticmethod
+    def is_server_started():
+        try:
+            status = urllib.request.urlopen(
+                "http://localhost:8000").status
+            return status == 200
+        except:
+            return False
+
     def toggle_server(self):
         try:
             # start server with lab
@@ -100,15 +109,8 @@ class GUI:
                 ) == "DEFAULT" else self.SELECTED_MODEL.get()}", stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
 
                 while not self.SERVER_STARTED:
-                    # using default local server
-                    status = None
-                    try:
-                        status = urllib.request.urlopen(
-                            "http://localhost:8000").status
-                    except:
-                        print("server not ready yet")
-                    if status == 200:
-                        self.SERVER_STARTED = True
+                    self.SERVER_STARTED = GUI.is_server_started()
+                    if self.SERVER_STARTED:
                         self.update_message(
                             "SYSTEM", "<<< INFO >>> Server started correctly :)")
                     else:
@@ -123,18 +125,14 @@ class GUI:
                 for children_pid in (psutil.Process(self.SERVER_PROCESS.pid)).children(recursive=True):
                     children_pid.kill()
                 while self.SERVER_STARTED:
-                    # using default local server
-                    status = None
-                    try:
-                        status = urllib.request.urlopen(
-                            "http://localhost:8000").status
-                        if status == 200:
-                            self.update_message(
-                                "SYSTEM", "<<< INFO >>> Waiting for server to stop...")
-                            sleep(5)
-                    except:
-                        self.SERVER_STARTED = False
-                self.update_message("SYSTEM", "<<< INFO >>> Server stopped")
+                    self.SERVER_STARTED = GUI.is_server_started()
+                    if self.SERVER_STARTED:
+                        self.update_message(
+                            "SYSTEM", "<<< INFO >>> Waiting for server to stop")
+                        sleep(5)
+                    else:
+                        self.update_message("SYSTEM", "<<< INFO >>> Server stopped :)")
+                    
                 self.get_available_models()
 
         except Exception as exc:
@@ -146,7 +144,8 @@ class GUI:
 
     def send_message(self, e):
         # TODO: check server is actually started or stopped for second window chat
-        if self.SERVER_STARTED:
+        other_server = GUI.is_server_started()
+        if self.SERVER_STARTED or other_server:
             text = e.widget.get('0.0', 'end')
             self.update_message("USER", text)
             e.widget.delete('0.0', 'end')
@@ -158,6 +157,8 @@ class GUI:
             self.CHAT_PROCESS = Popen(f"source venv/bin/activate; ilab chat -qq {
                                       text.replace("\n", "\\\n")}", stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
 
+            # TODO: streaming mode for printing the info on screen
+            # TODO: scroll to bottom
             stdout, stderr = self.CHAT_PROCESS.communicate()
             self.update_message("ILAB", stdout.decode('utf-8'))
 
