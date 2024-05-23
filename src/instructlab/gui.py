@@ -187,8 +187,20 @@ class GUI:
             self.update_message(
                 "SYSTEM", "<<< WARNING >>> Start the LLM server first")
 
+    def destroy_panels(self):
+        if self.CHAT_PANEL is not None:
+            self.CHAT_PANEL.destroy()
+            self.CHAT_PANEL = None
+
+        if self.TRAIN_PANEL is not None:
+            self.TRAIN_PANEL.destroy()
+            self.TRAIN_PANEL = None
+
     def show_chat(self):
-        if self.CHAT_PANEL is None:
+        if self.FOCUSED_PANEL != 'CHAT':
+            self.FOCUSED_PANEL = 'CHAT'
+            self.destroy_panels()
+
             self.CHAT_PANEL = tk.PanedWindow()
             self.TEXT_BOX = tk.Text(
                 self.CHAT_PANEL,
@@ -214,9 +226,11 @@ class GUI:
                 row=4, rowspan=3, sticky=tk.NE)
 
             self.CHAT_PANEL.pack()
-        else:
-            self.CHAT_PANEL.destroy()
-            self.CHAT_PANEL = None
+
+    def show_train(self):
+        if self.FOCUSED_PANEL != 'TRAIN':
+            self.FOCUSED_PANEL = 'TRAIN'
+            self.destroy_panels()
 
     def main(self):
 
@@ -228,7 +242,7 @@ class GUI:
 
         train_button = ttk.Button(
             selection_panel,
-            text="Train", command=lambda x: print("todo"))
+            text="Train", command=self.show_train)
         train_button.grid(row=0, column=1, sticky=tk.W)
         selection_panel.pack()
 
