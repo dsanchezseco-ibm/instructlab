@@ -56,6 +56,10 @@ class GUI:
         self.TEXT_BOX = None
         self.CHAT_PROCESS = None
 
+        self.TRAIN_PANEL = None
+
+        self.FOCUSED_PANEL = None
+
         self.MODELS = ["DEFAULT"]
         self.SELECTED_MODEL = None
         self.get_available_models()
