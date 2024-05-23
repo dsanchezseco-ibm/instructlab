@@ -52,6 +52,7 @@ class GUI:
             text='server UP' if self.SERVER_STARTED else 'server DOWN', foreground='green' if self.SERVER_STARTED else 'red')
         self.SERVER_MESSAGE.place(relx=0.01, rely=0.97)
 
+        self.CHAT_PANEL = None
         self.TEXT_BOX = None
         self.CHAT_PROCESS = None
 
@@ -184,33 +185,49 @@ class GUI:
                 "SYSTEM", "<<< WARNING >>> Start the LLM server first")
 
     def show_chat(self):
-        self.TEXT_BOX = tk.Text(
-            height=50,
-            width=150
-        )
-        self.TEXT_BOX.pack()
-        self.TEXT_BOX.config(state='disabled')
+        if self.CHAT_PANEL is None:
+            self.CHAT_PANEL = tk.PanedWindow()
+            self.TEXT_BOX = tk.Text(
+                self.CHAT_PANEL,
+                height=50,
+                width=150
+            )
+            self.TEXT_BOX.grid(row=0, rowspan=3, sticky=tk.EW)
+            self.TEXT_BOX.config(state='disabled')
+            # self.CHAT_PANEL.add(self.TEXT_BOX)
 
-        self.update_message('ILAB', "Hello! Ask me anything!")
+            self.update_message('ILAB', "Hello! Ask me anything!")
 
-        user_entry = tk.Text(width=150, height=10)
-        user_entry.pack()
+            user_entry = tk.Text(self.CHAT_PANEL, width=150, height=10)
+            user_entry.grid(row=3, rowspan=3, sticky=tk.EW)
 
-        # send with SHIFT+ENTER
-        user_entry.bind("<Shift-Return>", self.send_message)
-        # new line with ENTER
-        user_entry.bind(
-            "<Return>", lambda x: self.TEXT_BOX.insert('end', '\n'))
+            # send with SHIFT+ENTER
+            user_entry.bind("<Shift-Return>", self.send_message)
+            # new line with ENTER
+            user_entry.bind(
+                "<Return>", lambda x: self.TEXT_BOX.insert('end', '\n'))
+
+            tk.Label(self.CHAT_PANEL, text="'Shift+Enter' to send. TO-DO button").grid(
+                row=4, rowspan=3, sticky=tk.NE)
+
+            self.CHAT_PANEL.pack()
+        else:
+            self.CHAT_PANEL.destroy()
+            self.CHAT_PANEL = None
 
     def main(self):
 
+        selection_panel = tk.PanedWindow()
         chat_button = ttk.Button(
-            text="Chat", command=self.toggle_server)
-        chat_button.pack()
+            selection_panel,
+            text="Chat", command=self.show_chat)
+        chat_button.grid(row=0, column=0, sticky=tk.E)
 
         train_button = ttk.Button(
-            text="Train", command=self.toggle_server)
-        train_button.pack()
+            selection_panel,
+            text="Train", command=lambda x: print("todo"))
+        train_button.grid(row=0, column=1, sticky=tk.W)
+        selection_panel.pack()
 
         start_stop_server_button = ttk.Button(
             text="Start/Stop server", command=self.toggle_server)
