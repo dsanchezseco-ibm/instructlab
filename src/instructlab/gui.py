@@ -114,8 +114,11 @@ class GUI:
             if not self.SERVER_STARTED:
                 self.update_message(
                     "SYSTEM", f"<<< INFO >>> Starting the server with model '{self.SELECTED_MODEL.get()}'...")
-                self.SERVER_PROCESS = Popen(f"source venv/bin/activate; ilab serve --model-path {self.DEFAULT_MAP['serve']['model_path'] if self.SELECTED_MODEL.get(
-                ) == "DEFAULT" else self.SELECTED_MODEL.get()}", stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
+
+                model_path = self.DEFAULT_MAP['serve']['model_path'] if self.SELECTED_MODEL.get(
+                ) == "DEFAULT" else self.SELECTED_MODEL.get()
+                self.SERVER_PROCESS = Popen(
+                    f"source venv/bin/activate; ilab serve --model-path {model_path}", shell=True)
 
                 while not self.SERVER_STARTED:
                     self.SERVER_STARTED = GUI.is_server_started()
