@@ -99,6 +99,14 @@ class GUI:
         except:
             return False
 
+    def kill_server(self):
+        print("bye! :)")
+        if self.SERVER_PROCESS is not None:
+            for children_pid in (psutil.Process(self.SERVER_PROCESS.pid)).children(recursive=True):
+                children_pid.kill()
+            self.SERVER_PROCESS = None
+        self.WINDOW.destroy()
+
     def toggle_server(self):
         try:
             # start server with lab
@@ -122,8 +130,7 @@ class GUI:
                 # refresh available models for the next execution
                 self.update_message(
                     "SYSTEM", "<<< INFO >>> Shutting down the server...")
-                for children_pid in (psutil.Process(self.SERVER_PROCESS.pid)).children(recursive=True):
-                    children_pid.kill()
+                self.kill_server()
                 while self.SERVER_STARTED:
                     self.SERVER_STARTED = GUI.is_server_started()
                     if self.SERVER_STARTED:
@@ -221,9 +228,8 @@ class GUI:
 
         self.WINDOW.after(1000, self.init_lab)
 
+        # kill all the process on window close -> server could be still up otherwise
+        self.WINDOW.protocol("WM_DELETE_WINDOW", self.kill_server)
+
         # keep as last line of function to render the window
         self.WINDOW.mainloop()
-
-        # TODO: XXX: ##################
-        # TODO: XXX: kill all the process on window close -> server still up otherwise
-        # TODO: XXX: ##################
