@@ -14,8 +14,8 @@ import tkinter as tk
 from tkinter import ttk
 
 
-GEOMETRY_W = 1000
-GEOMETRY_H = 800
+GEOMETRY_W = 1200
+GEOMETRY_H = 900
 
 MODELS_FOLDER = 'models'
 
@@ -131,8 +131,9 @@ class GUI:
                             "SYSTEM", "<<< INFO >>> Waiting for server to stop")
                         sleep(5)
                     else:
-                        self.update_message("SYSTEM", "<<< INFO >>> Server stopped :)")
-                    
+                        self.update_message(
+                            "SYSTEM", "<<< INFO >>> Server stopped :)")
+
                 self.get_available_models()
 
         except Exception as exc:
@@ -153,9 +154,17 @@ class GUI:
             # XXX install locally with `pip install -e . -C cmake_args="-DLLAMA_METAL=on"`
             # call the chat in quick question (-qq) mode so it finishes after replying and only returns the result generated text
             # WARNING: it does not retain any context in between calls
-            # escape \n in input text for the command-like usage
-            self.CHAT_PROCESS = Popen(f"source venv/bin/activate; ilab chat -qq {
-                                      text.replace("\n", "\\\n")}", stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
+            self.CHAT_PROCESS = Popen(
+                f'''source venv/bin/activate;
+                ilab chat -qq -gm "$(cat << EOF
+                {text.replace('"', "'")}
+                EOF
+                )"''',
+                stdin=PIPE,
+                stdout=PIPE,
+                stderr=PIPE,
+                shell=True
+            )
 
             # TODO: streaming mode for printing the info on screen
             # TODO: scroll to bottom
@@ -177,7 +186,7 @@ class GUI:
 
         self.update_message('ILAB', "Hello! Ask me anything!")
 
-        user_entry = tk.Text(width=100, height=5)
+        user_entry = tk.Text(width=150, height=10)
         user_entry.pack()
 
         # send with SHIFT+ENTER
@@ -187,6 +196,14 @@ class GUI:
             "<Return>", lambda x: self.TEXT_BOX.insert('end', '\n'))
 
     def main(self):
+
+        chat_button = ttk.Button(
+            text="Chat", command=self.toggle_server)
+        chat_button.pack()
+
+        train_button = ttk.Button(
+            text="Train", command=self.toggle_server)
+        train_button.pack()
 
         start_stop_server_button = ttk.Button(
             text="Start/Stop server", command=self.toggle_server)
@@ -206,3 +223,7 @@ class GUI:
 
         # keep as last line of function to render the window
         self.WINDOW.mainloop()
+
+        # TODO: XXX: ##################
+        # TODO: XXX: kill all the process on window close -> server still up otherwise
+        # TODO: XXX: ##################
